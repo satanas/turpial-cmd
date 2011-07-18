@@ -14,12 +14,14 @@ from optparse import OptionParser
 
 from config import ConfigApp
 from libturpial.api.core import Core
-from libturpial.common import clean_bytecodes, ColumnType
+from libturpial.common import clean_bytecodes, detect_os
+from libturpial.common import ColumnType, OS_MAC
 
 try:
-    import ctypes
-    libc = ctypes.CDLL('libc.so.6')
-    libc.prctl(15, 'turpial-cmd', 0, 0)
+    if detect_os() != OS_MAC:
+        import ctypes
+        libc = ctypes.CDLL('libc.so.6')
+        libc.prctl(15, 'turpial-cmd', 0, 0)
 except ImportError:
     pass
 
@@ -30,8 +32,9 @@ INTRO = [
 ]
 
 ARGUMENTS = {
-    'show': ['accounts', 'timeline', 'replies', 'directs', 'sent', 'favs',
-        'rates', 'trends', 'following', 'followers', 'myprofile', 'userprofile']
+    'show': ['timeline', 'replies'],
+    'account': ['add', 'edit', 'del', 'list'],
+    'status': ['update', 'delete', 'sent'],
 }
 
 class Turpial(cmd.Cmd):
@@ -78,7 +81,7 @@ class Turpial(cmd.Cmd):
             self.cmdloop()
         except EOFError:
             self.do_exit()
-        
+    
     def __validate_index(self, index, array, blank=False):
         try:
             a = array[int(index)]
@@ -95,18 +98,18 @@ class Turpial(cmd.Cmd):
         except TypeError:
             if index is None:
                 return False
-                
+    
     def __validate_accounts(self):
         if len(self.core.list_accounts()) > 0:
             return True
-        print "You don't have any registered account. Run add_account command"
+        print "You don't have any registered account. Run 'account add' command"
         return False
         
     def __validate_arguments(self, arg_array, value):
         if value in arg_array:
             return True
         else:
-            print 'Argument invalid'
+            print 'Invalid Argument'
             return False
     
     def __build_message_menu(self):
@@ -145,7 +148,7 @@ class Turpial(cmd.Cmd):
             return ''
         else:
             return accounts[int(index)]
-            
+    
     def __build_protocols_menu(self):
         index = None
         protocols = self.core.list_protocols()
@@ -160,27 +163,63 @@ class Turpial(cmd.Cmd):
                 break
         return protocols[int(index)]
     
+    def __build_confirm_menu(self, message):
+        confirm = raw_input(message + ' [y/N]: ')
+        if confirm.lower() == 'y':
+            return True
+        else:
+            print 'Command cancelled'
+            return False
+        
     def default(self, line):
-        print '\n'.join(['Comando no encontrado.', INTRO[1], INTRO[2]])
+        print '\n'.join(['Command not found.', INTRO[1], INTRO[2]])
         
     def emptyline(self):
         pass
     
-    def do_add_account(self, arg):
-        username = raw_input('Username: ')
-        password = getpass.unix_getpass('Password: ')
-        protocol = self.__build_protocols_menu()
-        acc_id = self.core.register_account(username, password, protocol)
-        print 'Account added'
+    def do_account(self, arg):
+        if not self.__validate_arguments(ARGUMENTS['account'], arg): 
+            self.help_account(False)
+            return False
         
-    def do_edit_account(self, arg):
-        if not self.__validate_accounts(): return False
-        account = self.__build_accounts_menu()
-        password = getpass.unix_getpass('New Password: ')
-        username = account.split('-')[0]
-        protocol = account.split('-')[1]
-        self.core.register_account(username, password, protocol)
-        print 'Account edited'
+        if arg == 'add':
+            username = raw_input('Username: ')
+            password = getpass.unix_getpass('Password: ')
+            protocol = self.__build_protocols_menu()
+            acc_id = self.core.register_account(username, password, protocol)
+            print 'Account added'
+        elif arg == 'edit':
+            if not self.__validate_accounts(): return False
+            account = self.__build_accounts_menu()
+            password = getpass.unix_getpass('New Password: ')
+            username = account.split('-')[0]
+            protocol = account.split('-')[1]
+            self.core.register_account(username, password, protocol)
+            print 'Account edited'
+        elif arg == 'del':
+            if not self.__validate_accounts(): return False
+            account = self.__build_accounts_menu()
+            conf = self.__build_confirm_menu('Do you want to delete account %s?' %
+                account)
+            if not conf: 
+                return False
+            self.core.unregister_account(account)
+            print 'Account deleted'
+        elif arg == 'list':
+            self.show_accounts()
+            
+    def help_account(self, desc=True):
+        text = 'Manage user accounts'
+        if not desc:
+            text = ''
+        print '\n'.join([text,
+            'Usage: account <arg>\n',
+            'Possible arguments are:',
+            '  add:\t Add a new user account',
+            '  edit:\t Edit an existing user account',
+            '  del:\t Delete a user account',
+            '  list:\t Show all registered accounts',
+        ])
         
     def do_login(self, arg):
         if not self.__validate_accounts(): return False
@@ -199,14 +238,15 @@ class Turpial(cmd.Cmd):
             else:
                 print 'Logged in with account %s' % account.split('-')[0]
             
-    def do_show(self, arg):
-        if arg == 'accounts':
-            self.show_accounts()
-            return
+    def help_login(self):
+        print '\n'.join(['Login with one or many accounts',
+            'Usage: login',
+        ])
         
+    def do_show(self, arg):
         if not self.__validate_accounts(): return False
         if not self.__validate_arguments(ARGUMENTS['show'], arg): 
-            self.help_show()
+            self.help_show(False)
             return False
         
         account = self.__build_accounts_menu()
@@ -219,16 +259,13 @@ class Turpial(cmd.Cmd):
         elif arg == 'directs':
             rtn = self.core.get_column_statuses(account, ColumnType.DIRECTS)
             self.show_statuses(rtn)
-        elif arg == 'sent':
-            rtn = self.core.get_column_statuses(account, ColumnType.SENT)
-            self.show_statuses(rtn)
         elif arg == 'favorites':
             rtn = self.core.get_column_statuses(account, ColumnType.FAVORITES)
             self.show_statuses(rtn)
-        elif arg == 'myprofile':
+        elif arg == 'me':
             rtn = self.core.get_own_profile(account)
             self.show_profiles(rtn)
-        elif arg == 'userprofile':
+        elif arg == 'user':
             user = raw_input('Username: ')
             rtn = self.core.get_user_profile(account, user)
             self.show_profiles(rtn)
@@ -242,6 +279,19 @@ class Turpial(cmd.Cmd):
         #    self.show_rate_limits()
         else:
             self.default('')
+    
+    def help_show(self, desc=True):
+        text = 'Show basic information for each account'
+        if not desc:
+            text = ''
+        print '\n'.join([text,
+           'Usage: show <arg>\n',
+            'Possible arguments are:',
+            '  timeline:\t Show timeline for ',
+            '  edit:\t Edit an existing user account',
+            '  del:\t Delete a user account',
+            '  list:\t Show all registered accounts',
+        ])
         
     def do_search(self, args):
         args = args.split()
@@ -254,26 +304,49 @@ class Turpial(cmd.Cmd):
         if stype == 'people':
             self.show_profile(self.controller.search_people(query))
         
-    def do_post(self, status):
+    def do_status(self, arg):
         if not self.__validate_accounts(): return False
-        message = self.__build_message_menu()
-        if not message: return False
+        if not self.__validate_arguments(ARGUMENTS['status'], arg): 
+            self.help_status(False)
+            return False
         
         account = self.__build_accounts_menu(True)
-        if account == '':
-            for acc in self.core.list_accounts():
-                rtn = self.core.update_status(acc, message)
+        if arg == 'update':
+            message = self.__build_message_menu()
+            if not message: return False
+            
+            if account == '':
+                for acc in self.core.list_accounts():
+                    rtn = self.core.update_status(acc, message)
+                    if rtn.code > 0:
+                        print rtn.errmsg
+                    else:
+                        print 'Message posted in account %s' % acc.split('-')[0]
+            else:
+                rtn = self.core.update_status(account, message)
                 if rtn.code > 0:
                     print rtn.errmsg
                 else:
-                    print 'Message posted in account %s' % acc.split('-')[0]
-        else:
-            rtn = self.core.update_status(account, message)
-            if rtn.code > 0:
-                print rtn.errmsg
-            else:
-                print 'Message posted in account %s' % account.split('-')[0]
-                
+                    print 'Message posted in account %s' % account.split('-')[0]
+        elif arg == 'delete':
+            pass
+        elif arg == 'sent':
+            rtn = self.core.get_column_statuses(account, ColumnType.SENT)
+            self.show_statuses(rtn)
+    
+    def help_status(self, desc=True):
+        text = 'Manage statuses for each protocol'
+        if not desc:
+            text = ''
+        print '\n'.join([text,
+           'Usage: status <arg>\n',
+            'Possible arguments are:',
+            '  timeline:\t Show timeline for ',
+            '  edit:\t Edit an existing user account',
+            '  del:\t Delete a user account',
+            '  list:\t Show all registered accounts',
+        ])
+    
     def do_follow(self, user):
         self.controller.follow(user)
         
@@ -359,14 +432,7 @@ class Turpial(cmd.Cmd):
         print
         self.log.debug('Bye')
         return True
-        
-    def help_show(self):
-        print '\n'.join(['Muestra los distintos mensajes del usuario',
-            'show <arg>',
-            '  <arg>: Lo que se desea ver. Valores posibles: tweets, ' \
-            'replies, directs, favs, rates, trends, profile, following, ' \
-            'followers',
-        ])
+    '''
         
     def help_search(self):
         print '\n'.join(['Ejecuta una busqueda en Twitter',
@@ -444,15 +510,15 @@ class Turpial(cmd.Cmd):
             'short <url>',
             '  <url>: URL que se desea cortar',
         ])
-        
+    '''
     def help_help(self):
-        print 'Muestra la ayuda'
+        print 'Show help. Dah!'
         
     def help_exit(self):
-        print 'Salir de Turpial'
+        print 'Close the application'
     
     def help_EOF(self):
-        print 'Salir de Turpial'
+        print 'Close the application'
         
     def get_tweet_id(self, num):
         if num == '': return None
@@ -465,6 +531,10 @@ class Turpial(cmd.Cmd):
         return arr[num]['id']
         
     def show_accounts(self):
+        if len(self.core.list_accounts()) == 0:
+            print "There are no registered accounts"
+            return
+        
         print "Available accounts:"
         for acc in self.core.list_accounts():
             print "* %s - %s" % (acc.split('-')[0], acc.split('-')[1])
