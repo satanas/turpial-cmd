@@ -32,9 +32,9 @@ INTRO = [
 ]
 
 ARGUMENTS = {
-    'show': ['timeline', 'replies'],
-    'account': ['add', 'edit', 'del', 'list'],
-    'status': ['update', 'delete', 'sent'],
+    'account': ['add', 'edit', 'del', 'list', 'change', 'default'],
+    'status': ['update', 'delete'],
+    'profile': ['me', 'user', 'update'],
 }
 
 class Turpial(cmd.Cmd):
@@ -77,6 +77,8 @@ class Turpial(cmd.Cmd):
             print "Python v%X" % sys.hexversion
             sys.exit(0)
         
+        self.account = None
+        
         try:
             self.cmdloop()
         except EOFError:
@@ -103,6 +105,12 @@ class Turpial(cmd.Cmd):
         if len(self.core.list_accounts()) > 0:
             return True
         print "You don't have any registered account. Run 'account add' command"
+        return False
+    
+    def __validate_default_account(self):
+        if self.account:
+            return True
+        print "You don't have a default account. Run 'account change' command"
         return False
         
     def __validate_arguments(self, arg_array, value):
@@ -131,15 +139,11 @@ class Turpial(cmd.Cmd):
         
         index = None
         while 1:
-            accounts = []
-            print "Available accounts:"
-            for acc in self.core.list_accounts():
-                print "[%i] %s - %s" % (len(accounts), acc.split('-')[0], acc.split('-')[1])
-                accounts.append(acc)
+            accounts = self.__show_accounts()
             if _all:
-                index = raw_input('Select one account (or Enter for all): ')
+                index = raw_input('Select account (or Enter for all): ')
             else:
-                index = raw_input('Select one account: ')
+                index = raw_input('Select account: ')
             if not self.__validate_index(index, accounts, _all):
                 print "Invalid account"
             else:
@@ -149,6 +153,27 @@ class Turpial(cmd.Cmd):
         else:
             return accounts[int(index)]
     
+    def __build_change_account_menu(self):
+        if len(self.core.list_accounts()) == 1:
+            if self.account:
+                print "Your unique account is already your default"
+            else:
+                self.__add_first_account_as_default()
+        elif len(self.core.list_accounts()) > 1:
+            while 1:
+                accounts = self.__show_accounts()
+                index = raw_input('Select you new default account (or Enter for keep current): ')
+                if index == '':
+                    print "Default account remain with no changes"
+                    return True
+                if not self.__validate_index(index, accounts):
+                    print "Invalid account"
+                else:
+                    break
+            self.account = accounts[int(index)]
+            print "Set %s in %s as your new default account" % (
+                self.account.split('-')[0], self.account.split('-')[1])
+        
     def __build_protocols_menu(self):
         index = None
         protocols = self.core.list_protocols()
@@ -168,9 +193,69 @@ class Turpial(cmd.Cmd):
         if confirm.lower() == 'y':
             return True
         else:
-            print 'Command cancelled'
             return False
         
+    def __add_first_account_as_default(self):
+        self.account = self.core.list_accounts()[0]
+        print "Selected account %s in %s as default (*)" % (
+            self.account.split('-')[0], self.account.split('-')[1])
+    
+    def __show_accounts(self):
+        if len(self.core.list_accounts()) == 0:
+            print "There are no registered accounts"
+            return
+        
+        accounts = []
+        print "Available accounts:"
+        for acc in self.core.list_accounts():
+            ch = ''
+            if acc == self.account:
+                ch = ' (*)'
+            print "[%i] %s - %s%s" % (len(accounts), acc.split('-')[0], acc.split('-')[1], ch)
+            accounts.append(acc)
+        return accounts
+        
+    def __show_profiles(self, people):
+        if people.code > 0: 
+            print people.errmsg
+            return
+        
+        for p in people:
+            protected = '<protected>' if p.protected else ''
+            following = '<following>' if p.following else ''
+            
+            header = "@%s (%s) %s %s" % (p.username, p.fullname, 
+                following, protected)
+            print header
+            print '-' * len(header)
+            print "URL: %s" % p.url
+            print "Location: %s" % p.location
+            print "Bio: %s" % p.bio
+            if p.last_update: 
+                print "Last: %s" % p.last_update
+            print ''
+    
+    def __show_statuses(self, statuses):
+        if statuses.code > 0:
+            print statuses.errmsg
+            return
+        
+        count = 1
+        for status in statuses:
+            text = status.text.replace('\n', ' ')
+            inreply = ''
+            if status.in_reply_to_user:
+                inreply = ' in reply to %s' % status.in_reply_to_user
+            print "%d. @%s: %s" % (count, status.username, text)
+            print "%s from %s%s" % (status.datetime, status.source, inreply)
+            if status.reposted_by:
+                users = ''
+                for u in status.reposted_by:
+                    users += u + ' '
+                print 'Retweeted by %s' % status.reposted_by
+            print
+            count += 1
+    
     def default(self, line):
         print '\n'.join(['Command not found.', INTRO[1], INTRO[2]])
         
@@ -188,26 +273,39 @@ class Turpial(cmd.Cmd):
             protocol = self.__build_protocols_menu()
             acc_id = self.core.register_account(username, password, protocol)
             print 'Account added'
+            if len(self.core.list_accounts()) == 1: 
+                self.__add_first_account_as_default()
         elif arg == 'edit':
-            if not self.__validate_accounts(): return False
-            account = self.__build_accounts_menu()
+            if not self.__validate_default_account(): 
+                return False
             password = getpass.unix_getpass('New Password: ')
-            username = account.split('-')[0]
-            protocol = account.split('-')[1]
+            username = self.account.split('-')[0]
+            protocol = self.account.split('-')[1]
             self.core.register_account(username, password, protocol)
             print 'Account edited'
         elif arg == 'del':
-            if not self.__validate_accounts(): return False
+            if not self.__validate_accounts(): 
+                return False
             account = self.__build_accounts_menu()
             conf = self.__build_confirm_menu('Do you want to delete account %s?' %
                 account)
-            if not conf: 
+            if not conf:
+                print 'Command cancelled'
                 return False
             self.core.unregister_account(account)
+            if self.account == account:
+                self.account = None
             print 'Account deleted'
+        elif arg == 'change':
+            if not self.__validate_accounts():
+                return False
+            self.__build_change_account_menu()
         elif arg == 'list':
-            self.show_accounts()
-            
+            self.__show_accounts()
+        elif arg == 'default':
+            print "Default account: %s in %s" % (
+                self.account.split('-')[0], self.account.split('-')[1])
+    
     def help_account(self, desc=True):
         text = 'Manage user accounts'
         if not desc:
@@ -219,12 +317,18 @@ class Turpial(cmd.Cmd):
             '  edit:\t Edit an existing user account',
             '  del:\t Delete a user account',
             '  list:\t Show all registered accounts',
+            '  default:\t Show default account',
         ])
-        
+    
     def do_login(self, arg):
-        if not self.__validate_accounts(): return False
-        account = self.__build_accounts_menu(True)
-        if account == '':
+        if not self.__validate_accounts(): 
+            return False
+        
+        _all = True
+        if len(self.core.list_accounts()) > 1:
+            _all = self.__build_confirm_menu('Do you want to login with all available accounts?')
+        
+        if _all:
             for acc in self.core.list_accounts():
                 rtn = self.core.login(acc)
                 if rtn.code > 0:
@@ -232,67 +336,187 @@ class Turpial(cmd.Cmd):
                 else:
                     print 'Logged in with account %s' % acc.split('-')[0]
         else:
+            account = self.__build_accounts_menu()
             rtn = self.core.login(account)
             if rtn.code > 0:
                 print rtn.errmsg
             else:
                 print 'Logged in with account %s' % account.split('-')[0]
-            
+    
     def help_login(self):
         print '\n'.join(['Login with one or many accounts',
             'Usage: login',
         ])
-        
-    def do_show(self, arg):
-        if not self.__validate_accounts(): return False
-        if not self.__validate_arguments(ARGUMENTS['show'], arg): 
-            self.help_show(False)
+    
+    def do_profile(self, arg):
+        if not self.__validate_arguments(ARGUMENTS['profile'], arg): 
+            self.help_profile(False)
             return False
         
-        account = self.__build_accounts_menu()
-        if arg == 'timeline':
-            rtn = self.core.get_column_statuses(account, ColumnType.TIMELINE)
-            self.show_statuses(rtn)
-        elif arg == 'replies':
-            rtn = self.core.get_column_statuses(account, ColumnType.REPLIES)
-            self.show_statuses(rtn)
-        elif arg == 'directs':
-            rtn = self.core.get_column_statuses(account, ColumnType.DIRECTS)
-            self.show_statuses(rtn)
-        elif arg == 'favorites':
-            rtn = self.core.get_column_statuses(account, ColumnType.FAVORITES)
-            self.show_statuses(rtn)
-        elif arg == 'me':
-            rtn = self.core.get_own_profile(account)
-            self.show_profiles(rtn)
+        if not self.__validate_default_account(): 
+            return False
+        
+        if arg == 'me':
+            profile = self.core.get_own_profile(self.account)
+            if profile is None:
+                print 'You must be logged in'
+            else:
+                self.__show_profiles(profile)
         elif arg == 'user':
-            user = raw_input('Username: ')
-            rtn = self.core.get_user_profile(account, user)
-            self.show_profiles(rtn)
-        #elif arg == 'following':
-        #    self.show_profiles(self.controller.get_following())
-        #elif arg == 'followers':
-        #    self.show_followers(self.controller.get_followers())
-        #elif arg == 'trends':
-        #    self.show_trends(self.controller.get_trends())
-        #elif arg == 'rates':
-        #    self.show_rate_limits()
-        else:
-            self.default('')
+            user = raw_input('Type the username: ')
+            if user == '':
+                print 'You must specify a username'
+                return False
+            profile = self.core.get_user_profile(self.account, user)
+            if profile is None:
+                print 'You must be logged in'
+            else:
+                self.__show_profiles(profile)
+        elif arg == 'update':
+            args = {}
+            name = raw_input('Type your name (ENTER for none): ')
+            bio = raw_input('Type your bio (ENTER for none): ')
+            url = raw_input('Type your url (ENTER for none): ')
+            location = raw_input('Type your location (ENTER for none): ')
+            
+            if name != '':
+                args['name'] = name
+            if bio != '':
+                args['description'] = bio
+            if url != '':
+                args['url'] = url
+            if location != '':
+                args['location'] = location
+            result = self.core.update_profile(self.account, args)
+            
+            if result.code > 0: 
+                print result.errmsg
+            else:
+                print 'Profile updated'
     
-    def help_show(self, desc=True):
-        text = 'Show basic information for each account'
+    def help_profile(self, desc=True):
+        text = 'Manage user profile'
         if not desc:
             text = ''
         print '\n'.join([text,
-           'Usage: show <arg>\n',
+            'Usage: profile <arg>\n',
             'Possible arguments are:',
-            '  timeline:\t Show timeline for ',
-            '  edit:\t Edit an existing user account',
-            '  del:\t Delete a user account',
-            '  list:\t Show all registered accounts',
+            '  me:\t Show own profile',
+            '  user:\t Show profile for a specific user',
+            '  update:\t Update own profile',
+        ])
+    
+    def do_status(self, arg):
+        if not self.__validate_default_account(): 
+            return False
+        
+        if not self.__validate_arguments(ARGUMENTS['status'], arg): 
+            self.help_status(False)
+            return False
+        
+        if arg == 'update':
+            message = self.__build_message_menu()
+            if not message:
+                print 'You must to write something'
+                return False
+            
+            broadcast = self.__build_confirm_menu('Do you want to post the message in all available accounts?')
+            if broadcast:
+                for acc in self.core.list_accounts():
+                    rtn = self.core.update_status(acc, message)
+                    if rtn.code > 0:
+                        print rtn.errmsg
+                    else:
+                        print 'Message posted in account %s' % acc.split('-')[0]
+            else:
+                rtn = self.core.update_status(self.account, message)
+                if rtn.code > 0:
+                    print rtn.errmsg
+                else:
+                    print 'Message posted in account %s' % account.split('-')[0]
+        elif arg == 'delete':
+            print 'Not implemented'
+    
+    def help_status(self, desc=True):
+        text = 'Manage statuses for each protocol'
+        if not desc:
+            text = ''
+        print '\n'.join([text,
+           'Usage: status <arg>\n',
+            'Possible arguments are:',
+            '  update:\t Update status ',
+            '  delete:\t Delete status',
+        ])
+    
+    def do_column(self, arg):
+        if not self.__validate_default_account(): 
+            return False
+        
+        lists = self.core.list_columns(self.account)
+        if arg == '':
+            self.help_column(False)
+        elif arg == 'list':
+            if len(lists) == 0:
+                print "No column available. Maybe you need to login"
+                return False
+            print "Available columns:"
+            for li in lists:
+                print "  %s" % li
+        elif arg == ColumnType.TIMELINE:
+            rtn = self.core.get_column_statuses(self.account, ColumnType.TIMELINE)
+            self.__show_statuses(rtn)
+        elif arg == ColumnType.REPLIES:
+            rtn = self.core.get_column_statuses(self.account, ColumnType.REPLIES)
+            self.__show_statuses(rtn)
+        elif arg == ColumnType.DIRECTS:
+            rtn = self.core.get_column_statuses(self.account, ColumnType.DIRECTS)
+            self.__show_statuses(rtn)
+        elif arg == ColumnType.FAVORITES:
+            rtn = self.core.get_column_statuses(self.account, ColumnType.FAVORITES)
+            self.__show_statuses(rtn)
+        elif arg == ColumnType.SENT:
+            rtn = self.core.get_column_statuses(self.account, ColumnType.SENT)
+            self.__show_statuses(rtn)
+        else:
+            if arg in lists:
+                rtn = self.core.get_column_statuses(self.account, arg)
+                self.__show_statuses(rtn)
+            else:
+                print "Invalid column '%s'" % arg
+    
+    def help_column(self, desc=True):
+        text = 'Show user columns'
+        if not desc:
+            text = ''
+        print '\n'.join([text,
+           'Usage: column <arg>\n',
+            'Possible arguments are:',
+            '  list:\t\t List all available columns for that account',
+            '  timeline:\t Show timeline',
+            '  replies:\t Show replies',
+            '  directs:\t Show directs messages',
+            '  favs:\t\t Show statuses marked as favorites',
+            '  <list_id>:\t Show statuses for the user list with id <list_id>',
         ])
         
+    def do_friend(self, arg):
+        pass
+        
+    def help_friend(self, desc=True):
+        text = 'Manage user friends'
+        if not desc:
+            text = ''
+        print '\n'.join([text,
+           'Usage: friend <arg>\n',
+            'Possible arguments are:',
+            '  list:\t\t List all friends',
+            '  follow:\t Follow user',
+            '  unfollow:\t Unfollow friend',
+            '  mute:\t Put a friend into the silence box',
+            '  unmute:\t Get out a friend from the silence box',
+        ])
+        
+    '''
     def do_search(self, args):
         args = args.split()
         if len(args) < 2: 
@@ -304,90 +528,11 @@ class Turpial(cmd.Cmd):
         if stype == 'people':
             self.show_profile(self.controller.search_people(query))
         
-    def do_status(self, arg):
-        if not self.__validate_accounts(): return False
-        if not self.__validate_arguments(ARGUMENTS['status'], arg): 
-            self.help_status(False)
-            return False
-        
-        account = self.__build_accounts_menu(True)
-        if arg == 'update':
-            message = self.__build_message_menu()
-            if not message: return False
-            
-            if account == '':
-                for acc in self.core.list_accounts():
-                    rtn = self.core.update_status(acc, message)
-                    if rtn.code > 0:
-                        print rtn.errmsg
-                    else:
-                        print 'Message posted in account %s' % acc.split('-')[0]
-            else:
-                rtn = self.core.update_status(account, message)
-                if rtn.code > 0:
-                    print rtn.errmsg
-                else:
-                    print 'Message posted in account %s' % account.split('-')[0]
-        elif arg == 'delete':
-            pass
-        elif arg == 'sent':
-            rtn = self.core.get_column_statuses(account, ColumnType.SENT)
-            self.show_statuses(rtn)
-    
-    def help_status(self, desc=True):
-        text = 'Manage statuses for each protocol'
-        if not desc:
-            text = ''
-        print '\n'.join([text,
-           'Usage: status <arg>\n',
-            'Possible arguments are:',
-            '  timeline:\t Show timeline for ',
-            '  edit:\t Edit an existing user account',
-            '  del:\t Delete a user account',
-            '  list:\t Show all registered accounts',
-        ])
-    
     def do_follow(self, user):
         self.controller.follow(user)
         
     def do_unfollow(self, user):
         self.controller.unfollow(user)
-    '''
-    def do_update(self, args):
-        if len(args.split()) < 2: 
-            self.help_update()
-            return
-        field = args.split()[0]
-        value = args.replace(field + ' ', '')
-        
-        if field == 'bio':
-            if not self.validate_message(value, 160):
-                print u'NO se actualizó la bio.'
-                return
-            self.controller.update_profile(new_bio=value)
-        elif field == 'location':
-            if not self.validate_message(value, 30):
-                print u'NO se actualizó la ubicacion.'
-                return
-            self.controller.update_profile(new_location=value)
-        elif field == 'url':
-            if not self.validate_message(value, 100):
-                print u'NO se actualizó la URL.'
-                return
-            self.controller.update_profile(new_url=value)
-        elif field == 'name':
-            if not self.validate_message(value, 20):
-                print u'NO se actualizó el nombre.'
-                return
-            self.controller.update_profile(new_name=value)
-            
-    def do_delete(self, number):
-        twid = self.get_tweet_id(number)
-        if twid is None:
-            print 'No se puede localizar el mensaje seleccionado'
-            print 'El mensaje NO fue borrado.'
-            return
-        self.controller.destroy_status(twid)
         
     def do_fav(self, number):
         twid = self.get_tweet_id(number)
@@ -424,102 +569,7 @@ class Turpial(cmd.Cmd):
         
     def do_short(self, url):
         self.controller.short_url(url, self.show_shorten_url)
-    '''
-    def do_EOF(self, line):
-        return self.do_exit('')
-        
-    def do_exit(self, line):
-        print
-        self.log.debug('Bye')
-        return True
-    '''
-        
-    def help_search(self):
-        print '\n'.join(['Ejecuta una busqueda en Twitter',
-            'search <type> <query>',
-            u'  <type>: Tipo de búsqueda a realizar. Valores ' \
-                'posibles: people',
-            '  <query>: La cadena que se desea buscar'
-        ])
-        
-    def help_direct(self):
-        print '\n'.join([u'Envía un mensaje directo a un usuario',
-            'direct <user> <message>',
-            '  <user>: Nombre del usuario. Ej: pedroperez',
-            '  <message>: Mensaje que se desea enviar'
-        ])
-        
-    def help_update(self):
-        print '\n'.join(['Actualiza datos del usuario',
-            'update <field> <value>',
-            '  <field>: Campo que se desea actualizar. Valores ' \
-                'posibles: bio, location, url, name',
-            '  <value>: El nuevo valor para el campo seleccionado'
-        ])
     
-    def help_delete(self):
-        print '\n'.join(['Borra un estado (tweet)',
-            'delete <num>',
-            u'  <num>: Número en pantalla del estado (tweet) que desea borrar',
-        ])
-        
-    def help_fav(self):
-        print '\n'.join(['Marca un estado (tweet) como favorito',
-            'fav <num>',
-            u'  <num>: Número en pantalla del estado (tweet) que desea marcar',
-        ])
-        
-    def help_unfav(self):
-        print '\n'.join(['Desmarca un estado (tweet) de los favoritos',
-            'unfav <num>',
-            u'  <num>: Número en pantalla del estado (tweet) que desea desmarcar',
-        ])
-        
-    def help_tweet(self):
-        print '\n'.join(['Actualiza el estado del usuario',
-            'tweet <message>',
-            '  <message>: Mensaje que desea postear',
-        ])
-        
-    def help_follow(self):
-        print '\n'.join(['Seguir a una persona',
-            'follow <user>',
-            '  <user>: Persona a la que desea seguir',
-        ])
-        
-    def help_unfollow(self):
-        print '\n'.join(['Dejar de seguir a una persona',
-            'unfollow <user>',
-            '  <user>: Persona que ya no se desea seguir',
-        ])
-        
-    def help_mute(self):
-        print '\n'.join(['Silencia los mensajes de una persona sin bloquearla',
-            'mute <user>',
-            '  <user>: Persona a la que se desea silenciar',
-        ])
-        
-    def help_unmute(self):
-        print '\n'.join(['Visualiza los mensajes de una persona previamente silenciada',
-            'unmute <user>',
-            '  <user>: Persona cuyos mensajes se desean leer de nuevo',
-        ])
-        
-    def help_short(self):
-        print '\n'.join(['Corta una URL con el servicio seleccionado en las preferencias de usuario',
-            'short <url>',
-            '  <url>: URL que se desea cortar',
-        ])
-    '''
-    def help_help(self):
-        print 'Show help. Dah!'
-        
-    def help_exit(self):
-        print 'Close the application'
-    
-    def help_EOF(self):
-        print 'Close the application'
-        
     def get_tweet_id(self, num):
         if num == '': return None
         
@@ -529,61 +579,29 @@ class Turpial(cmd.Cmd):
         if (num < 1) or (num > len(arr)): return None
         
         return arr[num]['id']
+    '''
+    def do_EOF(self, line):
+        return self.do_exit('')
         
-    def show_accounts(self):
-        if len(self.core.list_accounts()) == 0:
-            print "There are no registered accounts"
-            return
+    def do_exit(self, line=None):
+        print
+        self.log.debug('Bye')
+        return True
+    
+    def help_help(self):
+        print 'Show help. Dah!'
         
-        print "Available accounts:"
-        for acc in self.core.list_accounts():
-            print "* %s - %s" % (acc.split('-')[0], acc.split('-')[1])
-        
-    def show_statuses(self, statuses):
-        if statuses.code > 0:
-            print statuses.errmsg
-            return
-        
-        count = 1
-        for status in statuses:
-            text = status.text.replace('\n', ' ')
-            inreply = ''
-            if status.in_reply_to_user:
-                inreply = ' in reply to %s' % status.in_reply_to_user
-            print "%d. @%s: %s" % (count, status.username, text)
-            print "%s from %s%s" % (status.datetime, status.source, inreply)
-            if status.reposted_by:
-                users = ''
-                for u in status.reposted_by:
-                    users += u + ' '
-                print 'Retweeted by %s' % status.reposted_by
-            print
-            count += 1
+    def help_exit(self):
+        print 'Close the application'
+    
+    def help_EOF(self):
+        print 'Close the application'
     
     def show_trends(self, trends):
         topten = ''
         for t in trends['trends']:
             topten += t['name'] + '  '
         print topten
-            
-    def show_profiles(self, people):
-        if people.code > 0: 
-            print people.errmsg
-            return
-        
-        for p in people:
-            protected = '<protected>' if p.protected else ''
-            following = '<following>' if p.following else ''
-            
-            header = "@%s (%s) %s %s" % (p.username, p.fullname, 
-                following, protected)
-            print header
-            print '-' * len(header)
-            print "URL: %s" % p.url
-            print "Location: %s" % p.location
-            print "Bio: %s" % p.bio
-            if p.last_update: 
-                print "Last: %s\n" % p.last_update
         
     def show_following(self, people):
         total = len(people)
