@@ -312,7 +312,7 @@ class Turpial(cmd.Cmd):
         elif arg == 'list':
             self.__show_accounts()
         elif arg == 'default':
-            print "Default account: %s in %s" % (
+            print "Your default account is %s in %s" % (
                 self.account.split('-')[0], self.account.split('-')[1])
     
     def help_account(self, desc=True):
@@ -477,21 +477,6 @@ class Turpial(cmd.Cmd):
             print "Available columns:"
             for li in lists:
                 print "  %s" % li
-        elif arg == ColumnType.TIMELINE:
-            rtn = self.core.get_column_statuses(self.account, ColumnType.TIMELINE)
-            self.__show_statuses(rtn)
-        elif arg == ColumnType.REPLIES:
-            rtn = self.core.get_column_statuses(self.account, ColumnType.REPLIES)
-            self.__show_statuses(rtn)
-        elif arg == ColumnType.DIRECTS:
-            rtn = self.core.get_column_statuses(self.account, ColumnType.DIRECTS)
-            self.__show_statuses(rtn)
-        elif arg == ColumnType.FAVORITES:
-            rtn = self.core.get_column_statuses(self.account, ColumnType.FAVORITES)
-            self.__show_statuses(rtn)
-        elif arg == ColumnType.SENT:
-            rtn = self.core.get_column_statuses(self.account, ColumnType.SENT)
-            self.__show_statuses(rtn)
         else:
             if arg in lists:
                 rtn = self.core.get_column_statuses(self.account, arg)
@@ -617,6 +602,46 @@ class Turpial(cmd.Cmd):
             '  send:\t\t Send direct message',
             '  delete:\t Destroy direct message',
         ])
+    
+    def do_favorite(self, arg):
+        if not self.__validate_default_account(): 
+            return False
+        
+        if not self.__validate_arguments(ARGUMENTS['favorite'], arg): 
+            self.help_status(False)
+            return False
+        
+        if arg == 'mark':
+            status_id = raw_input('Status ID: ')
+            if status_id == '':
+                print "You must specify a valid id"
+                return False
+            rtn = self.core.mark_favorite(self.account, status_id)
+            if rtn.code > 0:
+                print rtn.errmsg
+            else:
+                print 'Status marked as favorite'
+        elif arg == 'unmark':
+            status_id = raw_input('Status ID: ')
+            if status_id == '':
+                print "You must specify a valid id"
+                return False
+            rtn = self.core.unmark_favorite(self.account, status_id)
+            if rtn.code > 0:
+                print rtn.errmsg
+            else:
+                print 'Status unmarked as favorite'
+    
+    def help_favorite(self, desc=True):
+        text = 'Manage favorite marks of statuses'
+        if not desc:
+            text = ''
+        print '\n'.join([text,
+           'Usage: direct <arg>\n',
+            'Possible arguments are:',
+            '  mark:\t\t Mark a status as favorite',
+            '  unmark:\t Remove favorite mark from a status',
+        ])
     '''
     def do_search(self, args):
         args = args.split()
@@ -628,23 +653,9 @@ class Turpial(cmd.Cmd):
         
         if stype == 'people':
             self.show_profile(self.controller.search_people(query))
-        
-    def do_fav(self, number):
-        twid = self.get_tweet_id(number)
-        if twid is None:
-            print 'No se puede localizar el mensaje seleccionado'
-            print 'El mensaje NO fue marcado.'
-            return
-        self.controller.set_favorite(twid)
-        
-    def do_unfav(self, number):
-        twid = self.get_tweet_id(number)
-        if twid is None:
-            print 'No se puede localizar el mensaje seleccionado'
-            print 'El mensaje NO fue desmarcado.'
-            return
-        self.controller.unset_favorite(twid)
-        
+    
+    def do_trends:
+    
     def do_short(self, url):
         self.controller.short_url(url, self.show_shorten_url)
     '''
@@ -665,19 +676,6 @@ class Turpial(cmd.Cmd):
     def help_EOF(self):
         print 'Close the application'
     
-    def show_trends(self, trends):
-        topten = ''
-        for t in trends['trends']:
-            topten += t['name'] + '  '
-        print topten
-    
-    def show_followers(self, people):
-        total = len(people)
-        self.show_profile(people)
-        if total > 1: suffix = 'personas' 
-        else: suffix = 'persona'
-        print "Te siguen %d %s" % (total, suffix)
-        
     def show_shorten_url(self, text):
         print "URL Cortada:", text
 
