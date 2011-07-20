@@ -223,6 +223,10 @@ class Turpial(cmd.Cmd):
         return accounts
         
     def __show_profiles(self, people):
+        if not statuses:
+            print "There are no profiles to show"
+            return
+
         if people.code > 0: 
             print people.errmsg
             return
@@ -243,6 +247,10 @@ class Turpial(cmd.Cmd):
             print ''
     
     def __show_statuses(self, statuses):
+        if not statuses:
+            print "There are no statuses to show"
+            return
+        
         if statuses.code > 0:
             print statuses.errmsg
             return
@@ -479,6 +487,9 @@ class Turpial(cmd.Cmd):
             for li in lists:
                 print "  %s" % li
         else:
+            if len(lists) == 0:
+                print "No column available. Maybe you need to login"
+                return False
             if arg in lists:
                 rtn = self.core.get_column_statuses(self.account, arg)
                 self.__show_statuses(rtn)
