@@ -15,7 +15,7 @@ from optparse import OptionParser
 from config import ConfigApp
 from libturpial.api.core import Core
 from libturpial.common import clean_bytecodes, detect_os
-from libturpial.common import ColumnType, OS_MAC
+from libturpial.common import ColumnType, OS_MAC, VERSION as libturpial_ver
 
 try:
     if detect_os() != OS_MAC:
@@ -76,8 +76,9 @@ class Turpial(cmd.Cmd):
             sys.exit(0)
             
         if options.version:
-            print "Turpial (cmd) v%s" % self.version
-            print "Python v%X" % sys.hexversion
+            print "turpial (cmd) v%s" % self.version
+            print "libturpial v%s" % libturpial_ver
+            print "python v%X" % sys.hexversion
             sys.exit(0)
         
         self.account = None
@@ -642,23 +643,48 @@ class Turpial(cmd.Cmd):
             '  mark:\t\t Mark a status as favorite',
             '  unmark:\t Remove favorite mark from a status',
         ])
-    '''
-    def do_search(self, args):
-        args = args.split()
-        if len(args) < 2: 
-            self.help_search()
-            return
-        stype = args[0]
-        query = args[1]
+    
+    def do_search(self, arg=None):
+        if not self.__validate_default_account(): 
+            return False
         
-        if stype == 'people':
-            self.show_profile(self.controller.search_people(query))
+        if arg: 
+            self.help_search()
+            return False
+        
+        query = raw_input('Type what you want to search for: ')
+        rtn = self.core.search(self.account, query)
+        self.__show_statuses(rtn)
     
-    def do_trends:
+    def help_search(self):
+        print 'Search for a pattern'
     
-    def do_short(self, url):
-        self.controller.short_url(url, self.show_shorten_url)
-    '''
+    def do_trends(self, arg=None):
+        if not self.__validate_default_account(): 
+            return False
+        
+        if arg: 
+            self.help_trends()
+            return False
+        
+        trends = self.core.trends(self.account)
+        if trends.code > 0:
+            print trends.errmsg
+            return False
+        
+        for trend in trends:
+            print trend.title
+            print "=" * len(trend.title)
+            for topic in trend.items:
+                promoted = ''
+                if topic.promoted:
+                    promoted = '*'
+                print "%s%s |" % (topic.name, promoted),
+            print
+    
+    def help_trends(self):
+        print 'Show global and local trends'
+    
     def do_EOF(self, line):
         return self.do_exit('')
         

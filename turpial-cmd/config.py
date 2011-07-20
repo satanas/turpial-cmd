@@ -10,7 +10,7 @@ import os
 from libturpial.config import ConfigBase, GLOBAL_CFG
 
 CMD_CFG = GLOBAL_CFG
-CMD_CFG['App']['version'] = '0.0.1-a1'
+CMD_CFG['App']['version'] = '0.9.0-a1'
 
 class ConfigApp(ConfigBase):
     """Configuracion de la aplicacion"""
