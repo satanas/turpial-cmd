@@ -250,10 +250,13 @@ class Turpial(cmd.Cmd):
         for status in statuses:
             text = status.text.replace('\n', ' ')
             inreply = ''
+            client = ''
             if status.in_reply_to_user:
                 inreply = ' in reply to %s' % status.in_reply_to_user
-            print "%d. @%s: %s" % (count, status.username, text)
-            print "%s from %s%s" % (status.datetime, status.source, inreply)
+            if status.source:
+                client = ' from %s' % status.source
+            print "%d. @%s: %s (id: %s)" % (count, status.username, text, status.id_)
+            print "%s%s%s" % (status.datetime, client, inreply)
             if status.reposted_by:
                 users = ''
                 for u in status.reposted_by:
@@ -367,11 +370,11 @@ class Turpial(cmd.Cmd):
             else:
                 self.__show_profiles(profile)
         elif arg == 'user':
-            user = raw_input('Type the username: ')
-            if user == '':
+            username = raw_input('Type the username: ')
+            if username == '':
                 print 'You must specify a username'
                 return False
-            profile = self.core.get_user_profile(self.account, user)
+            profile = self.core.get_user_profile(self.account, username)
             if profile is None:
                 print 'You must be logged in'
             else:
@@ -437,9 +440,17 @@ class Turpial(cmd.Cmd):
                 if rtn.code > 0:
                     print rtn.errmsg
                 else:
-                    print 'Message posted in account %s' % account.split('-')[0]
+                    print 'Message posted in account %s' % self.account.split('-')[0]
         elif arg == 'delete':
-            print 'Not implemented'
+            status_id = raw_input('Status ID: ')
+            if status_id == '':
+                print "You must specify a valid id"
+                return False
+            rtn = self.core.destroy_status(self.account, status_id)
+            if rtn.code > 0:
+                print rtn.errmsg
+            else:
+                print 'Status deleted'
     
     def help_status(self, desc=True):
         text = 'Manage statuses for each protocol'
@@ -524,21 +535,21 @@ class Turpial(cmd.Cmd):
             for fn in friends:
                 print "+ @%s (%s)" % (fn.username, fn.fullname)
         elif arg == 'follow':
-            user = raw_input('Username: ')
-            if user == '':
+            username = raw_input('Username: ')
+            if username == '':
                 print "You must specify a valid user"
                 return False
-            rtn = self.core.follow(self.account, user)
+            rtn = self.core.follow(self.account, username)
             if rtn.code > 0:
                 print rtn.errmsg
                 return False
             print "Following %s" % user
         elif arg == 'unfollow':
-            user = raw_input('Username: ')
-            if user == '':
+            username = raw_input('Username: ')
+            if username == '':
                 print "You must specify a valid user"
                 return False
-            rtn = self.core.unfollow(self.account, user)
+            rtn = self.core.unfollow(self.account, username)
             if rtn.code > 0:
                 print rtn.errmsg
                 return False
@@ -561,7 +572,51 @@ class Turpial(cmd.Cmd):
             '  mute:\t\t Put a friend into the silence box',
             '  unmute:\t Get out a friend from the silence box',
         ])
+    
+    def do_direct(self, arg):
+        if not self.__validate_default_account(): 
+            return False
         
+        if not self.__validate_arguments(ARGUMENTS['direct'], arg): 
+            self.help_status(False)
+            return False
+        
+        if arg == 'send':
+            username = raw_input('Username: ')
+            if username == '':
+                print "You must specify a valid user"
+                return False
+            message = self.__build_message_menu()
+            if not message:
+                print 'You must to write something'
+                return False
+            
+            rtn = self.core.send_direct(self.account, username, message)
+            if rtn.code > 0:
+                print rtn.errmsg
+            else:
+                print 'Direct message sent'
+        elif arg == 'delete':
+            dm_id = raw_input('Direct message ID: ')
+            if dm_id == '':
+                print "You must specify a valid id"
+                return False
+            rtn = self.core.destroy_direct(self.account, dm_id)
+            if rtn.code > 0:
+                print rtn.errmsg
+            else:
+                print 'Direct message deleted'
+    
+    def help_direct(self, desc=True):
+        text = 'Manage user direct messages'
+        if not desc:
+            text = ''
+        print '\n'.join([text,
+           'Usage: direct <arg>\n',
+            'Possible arguments are:',
+            '  send:\t\t Send direct message',
+            '  delete:\t Destroy direct message',
+        ])
     '''
     def do_search(self, args):
         args = args.split()
@@ -590,17 +645,6 @@ class Turpial(cmd.Cmd):
             return
         self.controller.unset_favorite(twid)
         
-    def do_direct(self, line):
-        if len(line.split()) < 2: 
-            self.help_direct()
-            return
-        user = line.split()[0]
-        message = line.replace(user + ' ', '')
-        if not self.validate_message(message):
-            print u'NO se envió ningun mensaje.'
-            return
-        self.controller.send_direct(user, message)
-        
     def do_short(self, url):
         self.controller.short_url(url, self.show_shorten_url)
     '''
@@ -626,14 +670,7 @@ class Turpial(cmd.Cmd):
         for t in trends['trends']:
             topten += t['name'] + '  '
         print topten
-        
-    def show_following(self, people):
-        total = len(people)
-        self.show_profile(people)
-        if total > 1: suffix = 'personas' 
-        else: suffix = 'persona'
-        print "Estas siguiendo a %d %s" % (total, suffix)
-        
+    
     def show_followers(self, people):
         total = len(people)
         self.show_profile(people)
