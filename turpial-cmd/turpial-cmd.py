@@ -32,9 +32,12 @@ INTRO = [
 ]
 
 ARGUMENTS = {
-    'account': ['add', 'edit', 'del', 'list', 'change', 'default'],
+    'account': ['add', 'edit', 'delete', 'list', 'change', 'default'],
     'status': ['update', 'delete'],
     'profile': ['me', 'user', 'update'],
+    'friend': ['list', 'follow', 'unfollow', 'mute', 'unmute'],
+    'direct': ['send', 'delete'],
+    'favorite': ['mark', 'unmark'],
 }
 
 class Turpial(cmd.Cmd):
@@ -194,6 +197,9 @@ class Turpial(cmd.Cmd):
             return True
         else:
             return False
+            
+    def __user_input(self, message, blank=False):
+        raise NotImplemented
         
     def __add_first_account_as_default(self):
         self.account = self.core.list_accounts()[0]
@@ -283,7 +289,7 @@ class Turpial(cmd.Cmd):
             protocol = self.account.split('-')[1]
             self.core.register_account(username, password, protocol)
             print 'Account edited'
-        elif arg == 'del':
+        elif arg == 'delete':
             if not self.__validate_accounts(): 
                 return False
             account = self.__build_accounts_menu()
@@ -313,10 +319,10 @@ class Turpial(cmd.Cmd):
         print '\n'.join([text,
             'Usage: account <arg>\n',
             'Possible arguments are:',
-            '  add:\t Add a new user account',
-            '  edit:\t Edit an existing user account',
-            '  del:\t Delete a user account',
-            '  list:\t Show all registered accounts',
+            '  add:\t\t Add a new user account',
+            '  edit:\t\t Edit an existing user account',
+            '  delete:\t Delete a user account',
+            '  list:\t\t Show all registered accounts',
             '  default:\t Show default account',
         ])
     
@@ -344,9 +350,7 @@ class Turpial(cmd.Cmd):
                 print 'Logged in with account %s' % account.split('-')[0]
     
     def help_login(self):
-        print '\n'.join(['Login with one or many accounts',
-            'Usage: login',
-        ])
+        print 'Login with one or many accounts'
     
     def do_profile(self, arg):
         if not self.__validate_arguments(ARGUMENTS['profile'], arg): 
@@ -401,8 +405,8 @@ class Turpial(cmd.Cmd):
         print '\n'.join([text,
             'Usage: profile <arg>\n',
             'Possible arguments are:',
-            '  me:\t Show own profile',
-            '  user:\t Show profile for a specific user',
+            '  me:\t\t Show own profile',
+            '  user:\t\t Show profile for a specific user',
             '  update:\t Update own profile',
         ])
     
@@ -500,8 +504,50 @@ class Turpial(cmd.Cmd):
         ])
         
     def do_friend(self, arg):
-        pass
+        if not self.__validate_default_account(): 
+            return False
         
+        if not self.__validate_arguments(ARGUMENTS['friend'], arg): 
+            self.help_friend(False)
+            return False
+        
+        if arg == 'list':
+            friends = self.core.get_friends(self.account)
+            if friends.code > 0:
+                print rtn.errmsg
+                return False
+            
+            if len(friends) == 0:
+                print "Hey! What's wrong with you? You've no friends"
+                return False
+            print "Friends list:"
+            for fn in friends:
+                print "+ @%s (%s)" % (fn.username, fn.fullname)
+        elif arg == 'follow':
+            user = raw_input('Username: ')
+            if user == '':
+                print "You must specify a valid user"
+                return False
+            rtn = self.core.follow(self.account, user)
+            if rtn.code > 0:
+                print rtn.errmsg
+                return False
+            print "Following %s" % user
+        elif arg == 'unfollow':
+            user = raw_input('Username: ')
+            if user == '':
+                print "You must specify a valid user"
+                return False
+            rtn = self.core.unfollow(self.account, user)
+            if rtn.code > 0:
+                print rtn.errmsg
+                return False
+            print "Not following %s" % user
+        elif arg == 'mute':
+            print 'Not implemented'
+        elif arg == 'unmute':
+            print 'Not implemented'
+    
     def help_friend(self, desc=True):
         text = 'Manage user friends'
         if not desc:
@@ -512,7 +558,7 @@ class Turpial(cmd.Cmd):
             '  list:\t\t List all friends',
             '  follow:\t Follow user',
             '  unfollow:\t Unfollow friend',
-            '  mute:\t Put a friend into the silence box',
+            '  mute:\t\t Put a friend into the silence box',
             '  unmute:\t Get out a friend from the silence box',
         ])
         
@@ -527,12 +573,6 @@ class Turpial(cmd.Cmd):
         
         if stype == 'people':
             self.show_profile(self.controller.search_people(query))
-        
-    def do_follow(self, user):
-        self.controller.follow(user)
-        
-    def do_unfollow(self, user):
-        self.controller.unfollow(user)
         
     def do_fav(self, number):
         twid = self.get_tweet_id(number)
@@ -561,24 +601,8 @@ class Turpial(cmd.Cmd):
             return
         self.controller.send_direct(user, message)
         
-    def do_mute(self, user):
-        self.controller.mute(user)
-        
-    def do_unmute(self, user):
-        self.controller.unmute(user)
-        
     def do_short(self, url):
         self.controller.short_url(url, self.show_shorten_url)
-    
-    def get_tweet_id(self, num):
-        if num == '': return None
-        
-        num = int(num) - 1
-        arr = self.controller.tweets[:]
-        arr.reverse()
-        if (num < 1) or (num > len(arr)): return None
-        
-        return arr[num]['id']
     '''
     def do_EOF(self, line):
         return self.do_exit('')
