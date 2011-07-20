@@ -507,7 +507,7 @@ class Turpial(cmd.Cmd):
             '  timeline:\t Show timeline',
             '  replies:\t Show replies',
             '  directs:\t Show directs messages',
-            '  favs:\t\t Show statuses marked as favorites',
+            '  favorites:\t\t Show statuses marked as favorites',
             '  <list_id>:\t Show statuses for the user list with id <list_id>',
         ])
         
