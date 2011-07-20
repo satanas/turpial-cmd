@@ -575,7 +575,7 @@ class Turpial(cmd.Cmd):
             return False
         
         if not self.__validate_arguments(ARGUMENTS['direct'], arg): 
-            self.help_status(False)
+            self.help_direct(False)
             return False
         
         if arg == 'send':
