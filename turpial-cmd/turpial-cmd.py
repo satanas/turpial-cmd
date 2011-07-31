@@ -33,7 +33,7 @@ INTRO = [
 
 ARGUMENTS = {
     'account': ['add', 'edit', 'delete', 'list', 'change', 'default'],
-    'status': ['update', 'delete'],
+    'status': ['update', 'delete', 'conversation'],
     'profile': ['me', 'user', 'update'],
     'friend': ['list', 'follow', 'unfollow', 'block', 'unblock', 'spammer',
         'check'],
@@ -86,6 +86,8 @@ class Turpial(cmd.Cmd):
         
         try:
             self.cmdloop()
+        except KeyboardInterrupt:
+            self.do_exit()
         except EOFError:
             self.do_exit()
     
@@ -461,6 +463,16 @@ class Turpial(cmd.Cmd):
                 print rtn.errmsg
             else:
                 print 'Status deleted'
+        elif arg == 'conversation':
+            status_id = raw_input('Status ID: ')
+            if status_id == '':
+                print "You must specify a valid id"
+                return False
+            rtn = self.core.get_conversation(self.account, status_id)
+            if rtn.code > 0:
+                print rtn.errmsg
+            else:
+                self.__show_statuses(rtn)
     
     def help_status(self, desc=True):
         text = 'Manage statuses for each protocol'
@@ -471,6 +483,7 @@ class Turpial(cmd.Cmd):
             'Possible arguments are:',
             '  update:\t Update status ',
             '  delete:\t Delete status',
+            '  conversation:\t Show related tweets as conversation',
         ])
     
     def do_column(self, arg):
@@ -508,7 +521,7 @@ class Turpial(cmd.Cmd):
             '  timeline:\t Show timeline',
             '  replies:\t Show replies',
             '  directs:\t Show directs messages',
-            '  favorites:\t\t Show statuses marked as favorites',
+            '  favorites:\t Show statuses marked as favorites',
             '  <list_id>:\t Show statuses for the user list with id <list_id>',
         ])
         
