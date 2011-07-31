@@ -33,7 +33,7 @@ INTRO = [
 
 ARGUMENTS = {
     'account': ['add', 'edit', 'delete', 'list', 'change', 'default'],
-    'status': ['update', 'delete', 'conversation'],
+    'status': ['update', 'reply', 'delete', 'conversation'],
     'profile': ['me', 'user', 'update'],
     'friend': ['list', 'follow', 'unfollow', 'block', 'unblock', 'spammer',
         'check'],
@@ -453,6 +453,20 @@ class Turpial(cmd.Cmd):
                     print rtn.errmsg
                 else:
                     print 'Message posted in account %s' % self.account.split('-')[0]
+        elif arg == 'reply':
+            reply_id = raw_input('Status ID: ')
+            if status_id == '':
+                print "You must specify a valid id"
+                return False
+            message = self.__build_message_menu()
+            if not message:
+                print 'You must to write something'
+                return False
+            rtn = self.core.update_status(self.account, message, reply_id)
+            if rtn.code > 0:
+                print rtn.errmsg
+            else:
+                print 'Reply posted in account %s' % self.account.split('-')[0]
         elif arg == 'delete':
             status_id = raw_input('Status ID: ')
             if status_id == '':
