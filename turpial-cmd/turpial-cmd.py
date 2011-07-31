@@ -35,7 +35,8 @@ ARGUMENTS = {
     'account': ['add', 'edit', 'delete', 'list', 'change', 'default'],
     'status': ['update', 'delete'],
     'profile': ['me', 'user', 'update'],
-    'friend': ['list', 'follow', 'unfollow', 'mute', 'unmute'],
+    'friend': ['list', 'follow', 'unfollow', 'block', 'unblock', 'spammer',
+        'check'],
     'direct': ['send', 'delete'],
     'favorite': ['mark', 'unmark'],
 }
@@ -551,10 +552,49 @@ class Turpial(cmd.Cmd):
                 print rtn.errmsg
                 return False
             print "Not following %s" % user
-        elif arg == 'mute':
-            print 'Not implemented'
-        elif arg == 'unmute':
-            print 'Not implemented'
+        elif arg == 'block':
+            username = raw_input('Username: ')
+            if username == '':
+                print "You must specify a valid user"
+                return False
+            rtn = self.core.block(self.account, username)
+            if rtn.code > 0:
+                print rtn.errmsg
+                return False
+            print "Blocking user %s" % username
+        elif arg == 'unblock':
+            username = raw_input('Username: ')
+            if username == '':
+                print "You must specify a valid user"
+                return False
+            rtn = self.core.unblock(self.account, username)
+            if rtn.code > 0:
+                print rtn.errmsg
+                return False
+            print "Unblocking user %s" % username
+        elif arg == 'spammer':
+            username = raw_input('Username: ')
+            if username == '':
+                print "You must specify a valid user"
+                return False
+            rtn = self.core.report_spam(self.account, username)
+            if rtn.code > 0:
+                print rtn.errmsg
+                return False
+            print "Reporting user %s as spammer" % username
+        elif arg == 'check':
+            username = raw_input('Username: ')
+            if username == '':
+                print "You must specify a valid user"
+                return False
+            rtn = self.core.is_friend(self.account, username)
+            if rtn.code > 0:
+                print rtn.errmsg
+                return False
+            if rtn.items:
+                print "%s is following you" % username
+            else:
+                print "%s is not following you" % username
     
     def help_friend(self, desc=True):
         text = 'Manage user friends'
@@ -566,8 +606,10 @@ class Turpial(cmd.Cmd):
             '  list:\t\t List all friends',
             '  follow:\t Follow user',
             '  unfollow:\t Unfollow friend',
-            '  mute:\t\t Put a friend into the silence box',
-            '  unmute:\t Get out a friend from the silence box',
+            '  block:\t Block user',
+            '  unblock:\t Unblock user',
+            '  spammer:\t Report user as spammer',
+            '  check:\t Verify if certain user is following you',
         ])
     
     def do_direct(self, arg):
