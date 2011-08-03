@@ -455,7 +455,7 @@ class Turpial(cmd.Cmd):
                     print 'Message posted in account %s' % self.account.split('-')[0]
         elif arg == 'reply':
             reply_id = raw_input('Status ID: ')
-            if status_id == '':
+            if reply_id == '':
                 print "You must specify a valid id"
                 return False
             message = self.__build_message_menu()
@@ -514,6 +514,9 @@ class Turpial(cmd.Cmd):
             print "Available columns:"
             for li in lists:
                 print "  %s" % li
+        elif arg == 'public':
+            rtn = self.core.get_public_timeline(self.account)
+            self.__show_statuses(rtn)
         else:
             if len(lists) == 0:
                 print "No column available. Maybe you need to login"
@@ -536,6 +539,7 @@ class Turpial(cmd.Cmd):
             '  replies:\t Show replies',
             '  directs:\t Show directs messages',
             '  favorites:\t Show statuses marked as favorites',
+            '  public:\t Show public timeline',
             '  <list_id>:\t Show statuses for the user list with id <list_id>',
         ])
         
