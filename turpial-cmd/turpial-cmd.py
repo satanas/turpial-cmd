@@ -12,7 +12,7 @@ import logging
 import readline
 from optparse import OptionParser
 
-from config import ConfigApp
+#from config import ConfigApp
 from libturpial.api.core import Core
 from libturpial.common import clean_bytecodes, detect_os
 from libturpial.common import ColumnType, OS_MAC, VERSION as libturpial_ver
@@ -69,8 +69,8 @@ class Turpial(cmd.Cmd):
         self.prompt = 'turpial> '
         self.intro = '\n'.join(INTRO)
         self.core = Core()
-        self.app_cfg = ConfigApp()
-        self.version = self.app_cfg.read('App', 'version')
+        #self.app_cfg = ConfigApp()
+        #self.version = self.app_cfg.read('App', 'version')
         
         if options.clean:
             clean_bytecodes(__file__, self.log)
@@ -291,8 +291,9 @@ class Turpial(cmd.Cmd):
         if arg == 'add':
             username = raw_input('Username: ')
             password = getpass.unix_getpass('Password: ')
+            remember = self.__build_confirm_menu('Remember password')
             protocol = self.__build_protocols_menu()
-            acc_id = self.core.register_account(username, password, protocol)
+            acc_id = self.core.register_account(username, protocol, password, remember)
             print 'Account added'
             if len(self.core.list_accounts()) == 1: 
                 self.__add_first_account_as_default()
@@ -302,7 +303,8 @@ class Turpial(cmd.Cmd):
             password = getpass.unix_getpass('New Password: ')
             username = self.account.split('-')[0]
             protocol = self.account.split('-')[1]
-            self.core.register_account(username, password, protocol)
+            remember = self.__build_confirm_menu('Remember password')
+            self.core.register_account(username, protocol, password, remember)
             print 'Account edited'
         elif arg == 'delete':
             if not self.__validate_accounts(): 
