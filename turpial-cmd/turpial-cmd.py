@@ -160,6 +160,16 @@ class Turpial(cmd.Cmd):
         else:
             return accounts[int(index)]
     
+    def __build_password_menu(self, account):
+        passwd = None
+        while 1:
+            passwd = getpass.unix_getpass("Password for '%s' in '%s': " % (
+                account.split('-')[0], account.split('-')[1]))
+            if passwd:
+                return passwd
+            else:
+                print "Password can't be blank"
+            
     def __build_change_account_menu(self):
         if len(self.core.list_accounts()) == 1:
             if self.account:
@@ -315,7 +325,8 @@ class Turpial(cmd.Cmd):
             if not conf:
                 print 'Command cancelled'
                 return False
-            self.core.unregister_account(account)
+            del_all = self.__build_confirm_menu('Do you want to delete all data?')
+            self.core.unregister_account(account, del_all)
             if self.account == account:
                 self.account = None
             print 'Account deleted'
@@ -352,14 +363,30 @@ class Turpial(cmd.Cmd):
             _all = self.__build_confirm_menu('Do you want to login with all available accounts?')
         
         if _all:
+            work = False
             for acc in self.core.list_accounts():
+                if self.core.is_account_logged_in(acc):
+                    continue
+                work = True
+                if not self.core.has_stored_passwd(acc):
+                    passwd = self.__build_password_menu(acc)
+                    username = acc.split('-')[0]
+                    protocol = acc.split('-')[1]
+                    self.core.register_account(username, protocol, passwd)
                 rtn = self.core.login(acc)
                 if rtn.code > 0:
                     print rtn.errmsg
                 else:
                     print 'Logged in with account %s' % acc.split('-')[0]
+            if not work:
+                print "Already logged in with all available accounts"
         else:
             account = self.__build_accounts_menu()
+            if not self.core.has_stored_passwd(account):
+                passwd = self.__build_password_menu(account)
+                username = account.split('-')[0]
+                protocol = account.split('-')[1]
+                self.core.register_account(username, protocol, passwd)
             rtn = self.core.login(account)
             if rtn.code > 0:
                 print rtn.errmsg
