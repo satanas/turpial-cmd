@@ -213,7 +213,13 @@ class Turpial(cmd.Cmd):
             return False
             
     def __user_input(self, message, blank=False):
-        raise NotImplemented
+        while 1:
+            text = raw_input(message)
+            if text == '' and not blank:
+                print "You can't leave this field blank"
+                continue
+            break
+        return text
         
     def __add_first_account_as_default(self):
         self.account = self.core.list_accounts()[0]
@@ -287,6 +293,30 @@ class Turpial(cmd.Cmd):
             print
             count += 1
     
+    def __process_login(self, acc):
+        if not self.core.has_stored_passwd(acc):
+            passwd = self.__build_password_menu(acc)
+            username = acc.split('-')[0]
+            protocol = acc.split('-')[1]
+            self.core.register_account(username, protocol, passwd)
+        
+        rtn = self.core.login(acc)
+        if rtn.code > 0:
+            print rtn.errmsg
+            return
+        
+        auth_obj = rtn.items
+        if auth_obj.must_auth():
+            print "Please visit %s, authorize Turpial and type the pin returned" % auth_obj.url
+            pin = self.__user_input('Pin: ')
+            self.core.authorize_oauth_token(acc, pin)
+        
+        rtn = self.core.auth(acc)
+        if rtn.code > 0:
+            print rtn.errmsg
+        else:
+            print 'Logged in with account %s' % acc.split('-')[0]
+        
     def default(self, line):
         print '\n'.join(['Command not found.', INTRO[1], INTRO[2]])
         
@@ -368,30 +398,12 @@ class Turpial(cmd.Cmd):
                 if self.core.is_account_logged_in(acc):
                     continue
                 work = True
-                if not self.core.has_stored_passwd(acc):
-                    passwd = self.__build_password_menu(acc)
-                    username = acc.split('-')[0]
-                    protocol = acc.split('-')[1]
-                    self.core.register_account(username, protocol, passwd)
-                rtn = self.core.login(acc)
-                if rtn.code > 0:
-                    print rtn.errmsg
-                else:
-                    print 'Logged in with account %s' % acc.split('-')[0]
+                self.__process_login(acc)
             if not work:
                 print "Already logged in with all available accounts"
         else:
-            account = self.__build_accounts_menu()
-            if not self.core.has_stored_passwd(account):
-                passwd = self.__build_password_menu(account)
-                username = account.split('-')[0]
-                protocol = account.split('-')[1]
-                self.core.register_account(username, protocol, passwd)
-            rtn = self.core.login(account)
-            if rtn.code > 0:
-                print rtn.errmsg
-            else:
-                print 'Logged in with account %s' % account.split('-')[0]
+            acc = self.__build_accounts_menu()
+            self.__process_login(acc)
     
     def help_login(self):
         print 'Login with one or many accounts'
